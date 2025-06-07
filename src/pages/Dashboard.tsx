@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,18 +8,62 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, Clock, Users, Copy, Plus, Video } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Session {
+  id: string;
+  title: string;
+  date: string | null;
+  time: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
 
 const Dashboard = () => {
   const [sessionTitle, setSessionTitle] = useState("");
   const [sessionDate, setSessionDate] = useState("");
   const [sessionTime, setSessionTime] = useState("");
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { signOut, user } = useAuth();
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  const fetchSessions = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching sessions:', error);
+        toast({
+          title: "Error loading sessions",
+          description: "Could not load your sessions. Please try again.",
+          variant: "destructive",
+        });
+      } else {
+        setSessions(data || []);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
 
   const generateSessionId = () => {
     return Math.random().toString(36).substring(2, 15);
   };
 
-  const handleCreateSession = (e: React.FormEvent) => {
+  const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionTitle) {
       toast({
@@ -30,18 +74,67 @@ const Dashboard = () => {
       return;
     }
 
-    const sessionId = generateSessionId();
-    const sessionLink = `${window.location.origin}/room/${sessionId}`;
-    
-    // Copy to clipboard
-    navigator.clipboard.writeText(sessionLink);
-    
-    toast({
-      title: "Session created!",
-      description: "Link copied to clipboard. Share it with your study partners.",
-    });
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to create a session.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    console.log("Session created:", { sessionTitle, sessionDate, sessionTime, sessionId });
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .insert([
+          {
+            title: sessionTitle,
+            date: sessionDate || null,
+            time: sessionTime || null,
+            created_by: user.id,
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating session:', error);
+        toast({
+          title: "Error creating session",
+          description: "Could not create session. Please try again.",
+          variant: "destructive",
+        });
+      } else {
+        const sessionLink = `${window.location.origin}/room/${data.id}`;
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(sessionLink);
+        
+        toast({
+          title: "Session created!",
+          description: "Link copied to clipboard. Share it with your study partners.",
+        });
+
+        // Reset form
+        setSessionTitle("");
+        setSessionDate("");
+        setSessionTime("");
+
+        // Refresh sessions
+        fetchSessions();
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "Unexpected error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleJoinSession = (sessionId: string) => {
@@ -57,33 +150,34 @@ const Dashboard = () => {
     });
   };
 
-  // Mock upcoming sessions
-  const upcomingSessions = [
-    {
-      id: "abc123",
-      title: "Math Study Group",
-      date: "2024-06-08",
-      time: "14:00",
-      participants: 3
-    },
-    {
-      id: "def456",
-      title: "Physics Review",
-      date: "2024-06-09",
-      time: "16:30",
-      participants: 2
-    }
-  ];
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
-  const recentSessions = [
-    {
-      id: "xyz789",
-      title: "Chemistry Lab Prep",
-      date: "2024-06-06",
-      time: "10:00",
-      duration: "2h 15m"
-    }
-  ];
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString();
+  };
+
+  const formatTime = (time: string) => {
+    return time ? time.substring(0, 5) : '';
+  };
+
+  const upcomingSessions = sessions.filter(session => {
+    if (!session.date) return false;
+    const sessionDate = new Date(session.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return sessionDate >= today;
+  });
+
+  const recentSessions = sessions.filter(session => {
+    if (!session.date) return true; // Sessions without dates are considered recent
+    const sessionDate = new Date(session.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return sessionDate < today;
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -98,10 +192,13 @@ const Dashboard = () => {
               <span className="font-semibold text-lg">Zylo-Study</span>
             </Link>
             <div className="flex items-center space-x-4">
+              <span className="text-sm text-muted-foreground">
+                {user?.email}
+              </span>
               <Button variant="ghost" size="sm">
                 Profile
               </Button>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={handleSignOut}>
                 Sign Out
               </Button>
             </div>
@@ -143,6 +240,7 @@ const Dashboard = () => {
                       onChange={(e) => setSessionTitle(e.target.value)}
                       placeholder="e.g., Math Study Group"
                       className="mt-2"
+                      disabled={loading}
                     />
                   </div>
                   
@@ -155,6 +253,7 @@ const Dashboard = () => {
                         value={sessionDate}
                         onChange={(e) => setSessionDate(e.target.value)}
                         className="mt-2"
+                        disabled={loading}
                       />
                     </div>
                     <div>
@@ -165,12 +264,13 @@ const Dashboard = () => {
                         value={sessionTime}
                         onChange={(e) => setSessionTime(e.target.value)}
                         className="mt-2"
+                        disabled={loading}
                       />
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full">
-                    Create & Copy Link
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Creating..." : "Create & Copy Link"}
                   </Button>
                 </form>
               </CardContent>
@@ -194,17 +294,21 @@ const Dashboard = () => {
                           <div className="flex-1">
                             <h3 className="font-medium text-lg mb-2">{session.title}</h3>
                             <div className="flex items-center space-x-4 text-muted-foreground text-sm">
-                              <span className="flex items-center space-x-1">
-                                <Calendar className="w-4 h-4" />
-                                <span>{session.date}</span>
-                              </span>
-                              <span className="flex items-center space-x-1">
-                                <Clock className="w-4 h-4" />
-                                <span>{session.time}</span>
-                              </span>
+                              {session.date && (
+                                <span className="flex items-center space-x-1">
+                                  <Calendar className="w-4 h-4" />
+                                  <span>{formatDate(session.date)}</span>
+                                </span>
+                              )}
+                              {session.time && (
+                                <span className="flex items-center space-x-1">
+                                  <Clock className="w-4 h-4" />
+                                  <span>{formatTime(session.time)}</span>
+                                </span>
+                              )}
                               <span className="flex items-center space-x-1">
                                 <Users className="w-4 h-4" />
-                                <span>{session.participants} participants</span>
+                                <span>0 participants</span>
                               </span>
                             </div>
                           </div>
@@ -252,17 +356,32 @@ const Dashboard = () => {
                             <div className="flex items-center space-x-4 text-muted-foreground text-sm">
                               <span className="flex items-center space-x-1">
                                 <Calendar className="w-4 h-4" />
-                                <span>{session.date}</span>
+                                <span>{formatDate(session.created_at)}</span>
                               </span>
-                              <span className="flex items-center space-x-1">
-                                <Clock className="w-4 h-4" />
-                                <span>{session.duration}</span>
-                              </span>
+                              {session.time && (
+                                <span className="flex items-center space-x-1">
+                                  <Clock className="w-4 h-4" />
+                                  <span>{formatTime(session.time)}</span>
+                                </span>
+                              )}
                             </div>
                           </div>
-                          <Button variant="outline" size="sm">
-                            View Details
-                          </Button>
+                          <div className="flex items-center space-x-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => copySessionLink(session.id)}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              size="sm"
+                              onClick={() => handleJoinSession(session.id)}
+                            >
+                              <Video className="w-4 h-4 mr-2" />
+                              Join
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
