@@ -6,6 +6,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Helper function to convert ArrayBuffer to base64url
+function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+// Helper function to convert string to base64url
+function stringToBase64Url(str: string): string {
+  return btoa(str)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -21,6 +42,13 @@ serve(async (req) => {
       throw new Error('HMS credentials not found')
     }
 
+    const now = Math.floor(Date.now() / 1000)
+    
+    const header = {
+      alg: 'HS256',
+      typ: 'JWT'
+    }
+
     const payload = {
       access_key: HMS_APP_ACCESS_KEY,
       room_id: room_id,
@@ -28,15 +56,19 @@ serve(async (req) => {
       role: role,
       type: 'app',
       version: 2,
-      iat: Math.floor(Date.now() / 1000),
-      nbf: Math.floor(Date.now() / 1000)
+      iat: now,
+      nbf: now
     }
 
+    console.log('Creating token with payload:', payload)
+
     // Create JWT token
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
-    const payloadEncoded = btoa(JSON.stringify(payload))
+    const headerEncoded = stringToBase64Url(JSON.stringify(header))
+    const payloadEncoded = stringToBase64Url(JSON.stringify(payload))
     
-    const message = `${header}.${payloadEncoded}`
+    const message = `${headerEncoded}.${payloadEncoded}`
+    
+    // Create the signing key
     const key = await crypto.subtle.importKey(
       'raw',
       new TextEncoder().encode(HMS_APP_SECRET),
@@ -45,13 +77,18 @@ serve(async (req) => {
       ['sign']
     )
     
-    const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message))
-    const signatureEncoded = btoa(String.fromCharCode(...new Uint8Array(signature)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '')
+    // Sign the message
+    const signature = await crypto.subtle.sign(
+      'HMAC', 
+      key, 
+      new TextEncoder().encode(message)
+    )
+    
+    const signatureEncoded = arrayBufferToBase64Url(signature)
 
     const token = `${message}.${signatureEncoded}`
+
+    console.log('Token created successfully')
 
     return new Response(
       JSON.stringify({ token }),
@@ -61,6 +98,7 @@ serve(async (req) => {
       },
     )
   } catch (error) {
+    console.error('Error creating HMS token:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
