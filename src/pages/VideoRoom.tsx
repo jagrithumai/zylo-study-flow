@@ -210,7 +210,7 @@ const VideoRoomContent = ({
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.map((message) => (
+              {Array.isArray(messages) && messages.map((message) => (
                 <div key={message.id} className="space-y-1">
                   <div className="flex items-baseline space-x-2">
                     <span className="font-medium text-sm">{message.senderName}</span>

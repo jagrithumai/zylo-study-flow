@@ -1,6 +1,6 @@
 
 import { useRef, useEffect } from 'react';
-import { useHMSStore, useHMSActions, selectVideoTrackByPeerID, HMSPeer } from '@100mslive/react-sdk';
+import { useHMSStore, useHMSActions, selectVideoTrackByPeerID, selectAudioTrackByPeerID, HMSPeer } from '@100mslive/react-sdk';
 import { Card, CardContent } from '@/components/ui/card';
 import { MicOff, Crown } from 'lucide-react';
 
@@ -13,6 +13,7 @@ const VideoTile = ({ peer, isLocal = false }: VideoTileProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hmsActions = useHMSActions();
   const videoTrack = useHMSStore(selectVideoTrackByPeerID(peer.id));
+  const audioTrack = useHMSStore(selectAudioTrackByPeerID(peer.id));
 
   useEffect(() => {
     if (videoRef.current && videoTrack) {
@@ -54,7 +55,7 @@ const VideoTile = ({ peer, isLocal = false }: VideoTileProps) => {
             <span className="bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-sm font-medium">
               {isLocal ? 'You' : peer.name || 'Unknown'}
             </span>
-            {!peer.audioTrack?.enabled && (
+            {!audioTrack?.enabled && (
               <div className="bg-destructive text-destructive-foreground p-1 rounded">
                 <MicOff className="w-4 h-4" />
               </div>
