@@ -1,9 +1,8 @@
 
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { 
   Mic, 
   MicOff, 
@@ -14,59 +13,86 @@ import {
   Settings,
   Users,
   PenTool,
-  Minimize2,
-  Maximize2
+  Minimize2
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useHMS } from "@/hooks/useHMS";
+import VideoTile from "@/components/VideoTile";
+import { HMSRoomProvider } from '@100mslive/react-sdk';
 
 const VideoRoom = () => {
   const { roomId } = useParams();
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
+  const navigate = useNavigate();
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isWhiteboardMode, setIsWhiteboardMode] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
-  const [messages, setMessages] = useState([
-    { id: 1, user: "Alex", message: "Hey everyone! Ready to study?", time: "14:30" },
-    { id: 2, user: "Sarah", message: "Yes! Let's start with chapter 5", time: "14:31" }
-  ]);
 
-  // Mock participants
-  const participants = [
-    { id: 1, name: "You", isHost: true, isMuted: isMuted, isVideoOff: isVideoOff },
-    { id: 2, name: "Alex", isHost: false, isMuted: false, isVideoOff: false },
-    { id: 3, name: "Sarah", isHost: false, isMuted: true, isVideoOff: false }
-  ];
+  if (!roomId) {
+    return <div>Invalid room ID</div>;
+  }
 
-  const handleToggleMute = () => {
-    setIsMuted(!isMuted);
-    toast({
-      title: isMuted ? "Microphone on" : "Microphone muted",
-      description: `You are now ${isMuted ? "unmuted" : "muted"}.`,
-    });
-  };
+  return (
+    <HMSRoomProvider>
+      <VideoRoomContent 
+        roomId={roomId}
+        isChatOpen={isChatOpen}
+        setIsChatOpen={setIsChatOpen}
+        isWhiteboardMode={isWhiteboardMode}
+        setIsWhiteboardMode={setIsWhiteboardMode}
+        chatMessage={chatMessage}
+        setChatMessage={setChatMessage}
+        navigate={navigate}
+      />
+    </HMSRoomProvider>
+  );
+};
 
-  const handleToggleVideo = () => {
-    setIsVideoOff(!isVideoOff);
-    toast({
-      title: isVideoOff ? "Camera on" : "Camera off",
-      description: `Your camera is now ${isVideoOff ? "on" : "off"}.`,
-    });
-  };
+interface VideoRoomContentProps {
+  roomId: string;
+  isChatOpen: boolean;
+  setIsChatOpen: (open: boolean) => void;
+  isWhiteboardMode: boolean;
+  setIsWhiteboardMode: (mode: boolean) => void;
+  chatMessage: string;
+  setChatMessage: (message: string) => void;
+  navigate: (path: string) => void;
+}
+
+const VideoRoomContent = ({
+  roomId,
+  isChatOpen,
+  setIsChatOpen,
+  isWhiteboardMode,
+  setIsWhiteboardMode,
+  chatMessage,
+  setChatMessage,
+  navigate
+}: VideoRoomContentProps) => {
+  const {
+    isConnected,
+    isJoining,
+    peers,
+    localPeer,
+    isLocalAudioEnabled,
+    isLocalVideoEnabled,
+    messages,
+    leaveRoom,
+    toggleAudio,
+    toggleVideo,
+    sendMessage,
+  } = useHMS(roomId);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatMessage.trim()) return;
 
-    const newMessage = {
-      id: messages.length + 1,
-      user: "You",
-      message: chatMessage,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setMessages([...messages, newMessage]);
+    sendMessage(chatMessage);
     setChatMessage("");
+  };
+
+  const handleLeaveRoom = async () => {
+    await leaveRoom();
+    navigate("/dashboard");
   };
 
   const handleToggleWhiteboard = () => {
@@ -81,7 +107,22 @@ const VideoRoom = () => {
 
   useEffect(() => {
     console.log("Joined room:", roomId);
-  }, [roomId]);
+    console.log("Connected:", isConnected);
+    console.log("Peers:", peers);
+  }, [roomId, isConnected, peers]);
+
+  if (isJoining) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center mx-auto mb-4">
+            <span className="text-background font-bold text-lg">Z</span>
+          </div>
+          <p className="text-muted-foreground">Joining room...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -98,12 +139,17 @@ const VideoRoom = () => {
             <div className="text-muted-foreground text-sm">
               Room: {roomId}
             </div>
+            {isConnected && (
+              <div className="text-green-600 text-sm">
+                ● Connected
+              </div>
+            )}
           </div>
           
           <div className="flex items-center space-x-2">
             <Button variant="outline" size="sm">
               <Users className="w-4 h-4 mr-2" />
-              {participants.length}
+              {peers.length}
             </Button>
             <Button variant="outline" size="sm">
               <Settings className="w-4 h-4" />
@@ -131,41 +177,12 @@ const VideoRoom = () => {
               
               {/* Video Sidebar */}
               <div className="w-80 flex flex-col space-y-4 p-4 bg-muted/20">
-                {participants.map((participant) => (
-                  <Card key={participant.id} className="relative overflow-hidden">
-                    <CardContent className="p-0">
-                      <div className="aspect-video bg-muted flex items-center justify-center relative">
-                        {participant.isVideoOff ? (
-                          <div className="text-center">
-                            <div className="w-12 h-12 bg-foreground rounded-full flex items-center justify-center mb-2 mx-auto">
-                              <span className="text-background font-medium">
-                                {participant.name.charAt(0)}
-                              </span>
-                            </div>
-                            <p className="text-sm font-medium">{participant.name}</p>
-                          </div>
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-muted to-muted-foreground/20 flex items-center justify-center">
-                            <span className="text-muted-foreground text-sm">Camera feed</span>
-                          </div>
-                        )}
-                        
-                        {/* Status indicators */}
-                        <div className="absolute bottom-2 left-2 flex items-center space-x-1">
-                          {participant.isMuted && (
-                            <div className="bg-destructive text-destructive-foreground p-1 rounded">
-                              <MicOff className="w-3 h-3" />
-                            </div>
-                          )}
-                          {participant.isHost && (
-                            <div className="bg-primary text-primary-foreground px-2 py-1 rounded text-xs">
-                              Host
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                {peers.map((peer) => (
+                  <VideoTile 
+                    key={peer.id} 
+                    peer={peer} 
+                    isLocal={peer.id === localPeer?.id}
+                  />
                 ))}
               </div>
             </>
@@ -173,44 +190,13 @@ const VideoRoom = () => {
 
           {!isWhiteboardMode && (
             <>
-              {participants.map((participant) => (
-                <Card key={participant.id} className="m-4 relative overflow-hidden">
-                  <CardContent className="p-0">
-                    <div className="aspect-video bg-muted flex items-center justify-center relative">
-                      {participant.isVideoOff ? (
-                        <div className="text-center">
-                          <div className="w-16 h-16 bg-foreground rounded-full flex items-center justify-center mb-3 mx-auto">
-                            <span className="text-background font-medium text-xl">
-                              {participant.name.charAt(0)}
-                            </span>
-                          </div>
-                          <p className="font-medium">{participant.name}</p>
-                        </div>
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-muted to-muted-foreground/20 flex items-center justify-center">
-                          <span className="text-muted-foreground">Camera feed</span>
-                        </div>
-                      )}
-                      
-                      {/* Status indicators */}
-                      <div className="absolute bottom-3 left-3 flex items-center space-x-2">
-                        <span className="bg-background/80 backdrop-blur-sm px-2 py-1 rounded text-sm font-medium">
-                          {participant.name}
-                        </span>
-                        {participant.isMuted && (
-                          <div className="bg-destructive text-destructive-foreground p-1 rounded">
-                            <MicOff className="w-4 h-4" />
-                          </div>
-                        )}
-                        {participant.isHost && (
-                          <div className="bg-primary text-primary-foreground px-2 py-1 rounded text-xs">
-                            Host
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+              {peers.map((peer) => (
+                <div key={peer.id} className="m-4">
+                  <VideoTile 
+                    peer={peer} 
+                    isLocal={peer.id === localPeer?.id}
+                  />
+                </div>
               ))}
             </>
           )}
@@ -227,8 +213,10 @@ const VideoRoom = () => {
               {messages.map((message) => (
                 <div key={message.id} className="space-y-1">
                   <div className="flex items-baseline space-x-2">
-                    <span className="font-medium text-sm">{message.user}</span>
-                    <span className="text-xs text-muted-foreground">{message.time}</span>
+                    <span className="font-medium text-sm">{message.senderName}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(message.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
                   <p className="text-sm">{message.message}</p>
                 </div>
@@ -256,21 +244,21 @@ const VideoRoom = () => {
       <div className="border-t border-border p-4">
         <div className="flex items-center justify-center space-x-4">
           <Button
-            variant={isMuted ? "destructive" : "outline"}
+            variant={!isLocalAudioEnabled ? "destructive" : "outline"}
             size="lg"
-            onClick={handleToggleMute}
+            onClick={toggleAudio}
             className="rounded-full w-12 h-12"
           >
-            {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            {!isLocalAudioEnabled ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </Button>
           
           <Button
-            variant={isVideoOff ? "destructive" : "outline"}
+            variant={!isLocalVideoEnabled ? "destructive" : "outline"}
             size="lg"
-            onClick={handleToggleVideo}
+            onClick={toggleVideo}
             className="rounded-full w-12 h-12"
           >
-            {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+            {!isLocalVideoEnabled ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
           </Button>
 
           <Button
@@ -294,6 +282,7 @@ const VideoRoom = () => {
           <Button
             variant="destructive"
             size="lg"
+            onClick={handleLeaveRoom}
             className="rounded-full w-12 h-12"
           >
             <PhoneOff className="w-5 h-5" />
