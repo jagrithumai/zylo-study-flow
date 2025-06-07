@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import {
   useHMSStore,
@@ -8,7 +7,7 @@ import {
   selectIsLocalAudioEnabled,
   selectIsLocalVideoEnabled,
   selectLocalPeer,
-  selectHMSMessagesMap,
+  selectMessagesMap,
   HMSMessage
 } from '@100mslive/react-sdk';
 import { getHMSToken } from '@/lib/hms';
@@ -23,7 +22,7 @@ export const useHMS = (roomId: string) => {
   const isLocalAudioEnabled = useHMSStore(selectIsLocalAudioEnabled);
   const isLocalVideoEnabled = useHMSStore(selectIsLocalVideoEnabled);
   const localPeer = useHMSStore(selectLocalPeer);
-  const messagesMap = useHMSStore(selectHMSMessagesMap);
+  const messagesMap = useHMSStore(selectMessagesMap);
   const [isJoining, setIsJoining] = useState(false);
 
   // Convert messages map to array
