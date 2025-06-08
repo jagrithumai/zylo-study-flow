@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { AccessToken } from "https://esm.sh/livekit-server-sdk@1.2.7"
+import { AccessToken } from "https://deno.land/x/livekit_server_sdk@v2.5.6/mod.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,7 +54,7 @@ serve(async (req) => {
       canSubscribe: true,
     });
 
-    const token = at.toJwt();
+    const token = await at.toJwt();
 
     console.log(`Generated token for participant ${participant} in room ${room}`);
 
