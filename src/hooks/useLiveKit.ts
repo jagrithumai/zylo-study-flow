@@ -6,7 +6,9 @@ import {
   ConnectionState,
   DataPacket_Kind,
   Participant,
-  Track
+  Track,
+  LocalParticipant,
+  RemoteParticipant
 } from 'livekit-client';
 import { getLiveKitToken } from '@/lib/livekit';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,13 +27,13 @@ export const useLiveKit = (roomId: string) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [localParticipant, setLocalParticipant] = useState<Participant | null>(null);
+  const [localParticipant, setLocalParticipant] = useState<LocalParticipant | null>(null);
   const [isLocalAudioEnabled, setIsLocalAudioEnabled] = useState(true);
   const [isLocalVideoEnabled, setIsLocalVideoEnabled] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const updateParticipants = useCallback(() => {
-    const allParticipants = Array.from(room.remoteParticipants.values());
+    const allParticipants: Participant[] = Array.from(room.remoteParticipants.values());
     if (room.localParticipant) {
       allParticipants.unshift(room.localParticipant);
     }
@@ -106,7 +108,7 @@ export const useLiveKit = (roomId: string) => {
 
       await room.localParticipant?.publishData(
         new TextEncoder().encode(data),
-        DataPacket_Kind.RELIABLE
+        { reliable: true }
       );
     } catch (error) {
       console.error('Failed to send message:', error);

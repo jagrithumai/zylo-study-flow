@@ -14,8 +14,11 @@ const LiveKitVideoTile = ({ participant, isLocal = false }: LiveKitVideoTileProp
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    const videoTrack = participant.getTrack(Track.Source.Camera)?.videoTrack;
-    const audioTrack = participant.getTrack(Track.Source.Microphone)?.audioTrack;
+    const videoPublication = participant.getTrackPublication(Track.Source.Camera);
+    const audioPublication = participant.getTrackPublication(Track.Source.Microphone);
+    
+    const videoTrack = videoPublication?.track;
+    const audioTrack = audioPublication?.track;
 
     if (videoRef.current && videoTrack) {
       videoTrack.attach(videoRef.current);
@@ -31,10 +34,10 @@ const LiveKitVideoTile = ({ participant, isLocal = false }: LiveKitVideoTileProp
     };
   }, [participant, isLocal]);
 
-  const videoTrack = participant.getTrack(Track.Source.Camera);
-  const audioTrack = participant.getTrack(Track.Source.Microphone);
-  const isVideoEnabled = videoTrack && !videoTrack.isMuted;
-  const isAudioEnabled = audioTrack && !audioTrack.isMuted;
+  const videoPublication = participant.getTrackPublication(Track.Source.Camera);
+  const audioPublication = participant.getTrackPublication(Track.Source.Microphone);
+  const isVideoEnabled = videoPublication && !videoPublication.isMuted;
+  const isAudioEnabled = audioPublication && !audioPublication.isMuted;
 
   return (
     <Card className="relative overflow-hidden">
