@@ -16,9 +16,8 @@ import {
   Minimize2
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { useHMS } from "@/hooks/useHMS";
-import VideoTile from "@/components/VideoTile";
-import { HMSRoomProvider } from '@100mslive/react-sdk';
+import { useLiveKit } from "@/hooks/useLiveKit";
+import LiveKitVideoTile from "@/components/LiveKitVideoTile";
 
 const VideoRoom = () => {
   const { roomId } = useParams();
@@ -31,48 +30,11 @@ const VideoRoom = () => {
     return <div>Invalid room ID</div>;
   }
 
-  return (
-    <HMSRoomProvider>
-      <VideoRoomContent 
-        roomId={roomId}
-        isChatOpen={isChatOpen}
-        setIsChatOpen={setIsChatOpen}
-        isWhiteboardMode={isWhiteboardMode}
-        setIsWhiteboardMode={setIsWhiteboardMode}
-        chatMessage={chatMessage}
-        setChatMessage={setChatMessage}
-        navigate={navigate}
-      />
-    </HMSRoomProvider>
-  );
-};
-
-interface VideoRoomContentProps {
-  roomId: string;
-  isChatOpen: boolean;
-  setIsChatOpen: (open: boolean) => void;
-  isWhiteboardMode: boolean;
-  setIsWhiteboardMode: (mode: boolean) => void;
-  chatMessage: string;
-  setChatMessage: (message: string) => void;
-  navigate: (path: string) => void;
-}
-
-const VideoRoomContent = ({
-  roomId,
-  isChatOpen,
-  setIsChatOpen,
-  isWhiteboardMode,
-  setIsWhiteboardMode,
-  chatMessage,
-  setChatMessage,
-  navigate
-}: VideoRoomContentProps) => {
   const {
     isConnected,
     isJoining,
-    peers,
-    localPeer,
+    participants,
+    localParticipant,
     isLocalAudioEnabled,
     isLocalVideoEnabled,
     messages,
@@ -80,7 +42,7 @@ const VideoRoomContent = ({
     toggleAudio,
     toggleVideo,
     sendMessage,
-  } = useHMS(roomId);
+  } = useLiveKit(roomId);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,8 +70,8 @@ const VideoRoomContent = ({
   useEffect(() => {
     console.log("Joined room:", roomId);
     console.log("Connected:", isConnected);
-    console.log("Peers:", peers);
-  }, [roomId, isConnected, peers]);
+    console.log("Participants:", participants);
+  }, [roomId, isConnected, participants]);
 
   if (isJoining) {
     return (
@@ -149,7 +111,7 @@ const VideoRoomContent = ({
           <div className="flex items-center space-x-2">
             <Button variant="outline" size="sm">
               <Users className="w-4 h-4 mr-2" />
-              {peers.length}
+              {participants.length}
             </Button>
             <Button variant="outline" size="sm">
               <Settings className="w-4 h-4" />
@@ -177,11 +139,11 @@ const VideoRoomContent = ({
               
               {/* Video Sidebar */}
               <div className="w-80 flex flex-col space-y-4 p-4 bg-muted/20">
-                {peers.map((peer) => (
-                  <VideoTile 
-                    key={peer.id} 
-                    peer={peer} 
-                    isLocal={peer.id === localPeer?.id}
+                {participants.map((participant) => (
+                  <LiveKitVideoTile 
+                    key={participant.sid} 
+                    participant={participant} 
+                    isLocal={participant === localParticipant}
                   />
                 ))}
               </div>
@@ -190,11 +152,11 @@ const VideoRoomContent = ({
 
           {!isWhiteboardMode && (
             <>
-              {peers.map((peer) => (
-                <div key={peer.id} className="m-4">
-                  <VideoTile 
-                    peer={peer} 
-                    isLocal={peer.id === localPeer?.id}
+              {participants.map((participant) => (
+                <div key={participant.sid} className="m-4">
+                  <LiveKitVideoTile 
+                    participant={participant} 
+                    isLocal={participant === localParticipant}
                   />
                 </div>
               ))}
@@ -210,7 +172,7 @@ const VideoRoomContent = ({
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {Array.isArray(messages) && messages.map((message) => (
+              {messages.map((message) => (
                 <div key={message.id} className="space-y-1">
                   <div className="flex items-baseline space-x-2">
                     <span className="font-medium text-sm">{message.senderName}</span>
